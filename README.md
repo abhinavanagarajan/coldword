@@ -1,4 +1,4 @@
-# Behavior-Based Encryption POC
+## Behavior-Based Encryption POC
 
 This project demonstrates how human typing rhythm (Keystroke Dynamics) can be used as an entropy source for AES-256 encryption.
 
@@ -35,3 +35,5 @@ If the "nudge" isn't enough to land you back in the original bins (i.e., your ti
 - **macOS**: Requires Accessibility permissions for `pynput` to listen to global keystrokes.
 - **Python 3.x**
 - **Libraries**: `pynput`, `pycryptodome`, `numpy`
+
+<3 Abhinav

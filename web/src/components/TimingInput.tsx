@@ -11,82 +11,98 @@ interface TimingInputProps {
 
 const TimingInput: React.FC<TimingInputProps> = ({ targetPhrase, onFinished, placeholder, disabled }) => {
     const [value, setValue] = useState("");
-    const events = useRef<{ action: 'press' | 'release', key: string, timestamp: number }[]>([]);
-    const presses = useRef<{ [key: string]: number }>({});
+
+    // Per-character timing maps
+    const pressTimes = useRef<(number | null)[]>(new Array(targetPhrase.length).fill(null));
+    const releaseTimes = useRef<(number | null)[]>(new Array(targetPhrase.length).fill(null));
+    const charIndices = useRef<{ [key: string]: number[] }>({}); // Map 't' to indices it appears at
+
+    // Initialize character index mapping (e.g., 'e' might be at 2 and 14)
+    useEffect(() => {
+        const mapping: { [key: string]: number[] } = {};
+        targetPhrase.split('').forEach((char, i) => {
+            const c = char.toLowerCase();
+            if (!mapping[c]) mapping[c] = [];
+            mapping[c].push(i);
+        });
+        charIndices.current = mapping;
+    }, [targetPhrase]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (disabled) return;
+        if (disabled || e.repeat) return;
+        const key = e.key.toLowerCase();
+        if (key === 'shift' || key === 'control' || key === 'alt') return;
 
-        // Ignore modifiers
-        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return;
+        // Find the FIRST null slot for this key that is roughly near the current cursor
+        const indices = charIndices.current[key];
+        if (!indices) return;
 
-        const key = e.key;
-        if (!presses.current[key]) {
-            presses.current[key] = performance.now() / 1000;
-            events.current.push({ action: 'press', key, timestamp: performance.now() / 1000 });
+        const nextSlot = indices.find(idx => pressTimes.current[idx] === null && idx >= value.length - 1 && idx <= value.length + 1);
+
+        if (nextSlot !== undefined) {
+            pressTimes.current[nextSlot] = performance.now() / 1000;
         }
     };
 
     const handleKeyUp = (e: React.KeyboardEvent) => {
         if (disabled) return;
-        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return;
-
-        const key = e.key;
-        if (presses.current[key]) {
-            events.current.push({ action: 'release', key, timestamp: performance.now() / 1000 });
-            delete presses.current[key];
-        }
+        const key = e.key.toLowerCase();
 
         if (e.key === 'Enter') {
             processAndFinish();
+            return;
+        }
+
+        // Find the slot for this key that was pressed but not yet released
+        const indices = charIndices.current[key];
+        if (!indices) return;
+
+        const openSlot = indices.find(idx => pressTimes.current[idx] !== null && releaseTimes.current[idx] === null);
+
+        if (openSlot !== undefined) {
+            releaseTimes.current[openSlot] = performance.now() / 1000;
         }
     };
 
     const processAndFinish = () => {
-        const dwell_times: number[] = [];
-        const flight_times: number[] = [];
-        let last_release_time: number | null = null;
-        const temp_presses: { [key: string]: number } = {};
-
-        const target_len = targetPhrase.length;
+        const targetLen = targetPhrase.length;
 
         // Validation: Passphrase must match exactly
         if (value.trim() !== targetPhrase.trim()) {
             alert(`Typo detected! Please type exactly: "${targetPhrase}"`);
-            setValue("");
-            events.current = [];
+            reset();
             return;
         }
 
-        for (const ev of events.current) {
-            if (ev.action === 'press') {
-                temp_presses[ev.key] = ev.timestamp;
-                if (last_release_time !== null) {
-                    if (flight_times.length < target_len - 1) {
-                        flight_times.push(ev.timestamp - last_release_time);
-                    }
-                }
-            } else if (ev.action === 'release') {
-                if (temp_presses[ev.key]) {
-                    if (dwell_times.length < target_len) {
-                        dwell_times.push(ev.timestamp - temp_presses[ev.key]);
-                        last_release_time = ev.timestamp;
-                    }
-                    delete temp_presses[ev.key];
+        const dwell_times: number[] = new Array(targetLen).fill(0.1); // Default 100ms fallback
+        const flight_times: number[] = new Array(targetLen - 1).fill(0.1);
+
+        for (let i = 0; i < targetLen; i++) {
+            const p = pressTimes.current[i];
+            const r = releaseTimes.current[i];
+
+            if (p !== null && r !== null) {
+                dwell_times[i] = Math.max(r - p, 0.01);
+            }
+
+            // Flight time = Time between Release of i and Press of i+1
+            if (i < targetLen - 1) {
+                const rCurr = releaseTimes.current[i];
+                const pNext = pressTimes.current[i + 1];
+                if (rCurr !== null && pNext !== null) {
+                    flight_times[i] = pNext - rCurr;
                 }
             }
         }
 
-        // Padding if needed
-        while (dwell_times.length < target_len) dwell_times.push(0);
-        while (flight_times.length < target_len - 1) flight_times.push(0);
-
-        const vector = [...dwell_times.slice(0, target_len), ...flight_times.slice(0, target_len - 1)];
+        const vector = [...dwell_times, ...flight_times];
         onFinished(vector);
+    };
 
-        // Reset for next time
-        // setValue("");
-        // events.current = [];
+    const reset = () => {
+        setValue("");
+        pressTimes.current = new Array(targetPhrase.length).fill(null);
+        releaseTimes.current = new Array(targetPhrase.length).fill(null);
     };
 
     return (
@@ -96,11 +112,11 @@ const TimingInput: React.FC<TimingInputProps> = ({ targetPhrase, onFinished, pla
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
-            placeholder={placeholder || `Type: "${targetPhrase}" and press Enter`}
+            placeholder={placeholder || `Type: "${targetPhrase}"`}
             disabled={disabled}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+            autoComplete="off"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder:text-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-medium text-lg"
         />
     );
 };
-
 export default TimingInput;

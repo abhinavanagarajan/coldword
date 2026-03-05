@@ -32,8 +32,9 @@ class VerificationRequest(BaseModel):
 @app.post("/enroll")
 async def enroll(req: EnrollmentRequest):
     try:
-        extractor = FuzzyExtractor(bin_size=0.3)
+        extractor = FuzzyExtractor(bin_size=1.2)
         timing_np = np.array(req.timing_vector)
+        print(f"ENROLL: Received vector of length {len(timing_np)}")
         
         key, helper, salt = extractor.generate(timing_np)
         key_hash = hashlib.sha256(key).hexdigest()
@@ -54,8 +55,9 @@ async def enroll(req: EnrollmentRequest):
 @app.post("/verify")
 async def verify(req: VerificationRequest):
     try:
-        extractor = FuzzyExtractor(bin_size=0.3)
+        extractor = FuzzyExtractor(bin_size=1.2)
         timing_np = np.array(req.timing_vector)
+        print(f"VERIFY: Received vector of length {len(timing_np)}")
         helper_np = np.array(req.helper)
         salt_bytes = base64.b64decode(req.salt)
         

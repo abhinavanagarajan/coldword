@@ -5,28 +5,32 @@ import base64
 
 class AESManager:
     def __init__(self, key):
-        self.key = key # Must be 32 bytes for AES-256
+        self.key = key 
 
     def encrypt(self, data):
-        """Encrypts a string using AES-256-CBC."""
-        iv = get_random_bytes(16)
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        ct_bytes = cipher.encrypt(pad(data.encode(), AES.block_size))
+        """Encrypts a string using AES-256-GCM (Authenticated Encryption)."""
+        # GCM mode is preferred because it provides integrity (AEAD)
+        cipher = AES.new(self.key, AES.MODE_GCM)
+        ciphertext, tag = cipher.encrypt_and_digest(data.encode())
         
-        # Combine IV and Ciphertext for storage
-        result = base64.b64encode(iv + ct_bytes).decode('utf-8')
+        # Combine Nonce (16 bytes), Tag (16 bytes), and Ciphertext
+        # These are all required for secure decryption in GCM mode
+        result = base64.b64encode(cipher.nonce + tag + ciphertext).decode('utf-8')
         return result
 
     def decrypt(self, encoded_data):
-        """Decrypts the base64 string."""
-        raw_data = base64.b64decode(encoded_data)
-        iv = raw_data[:16]
-        ct = raw_data[16:]
-        
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        """Decrypts the base64 string and verifies integrity."""
         try:
-            pt = unpad(cipher.decrypt(ct), AES.block_size)
+            raw_data = base64.b64decode(encoded_data)
+            # Standard GCM layout: Nonce [0:16], Tag [16:32], Ciphertext [32:]
+            nonce = raw_data[:16]
+            tag = raw_data[16:32]
+            ciphertext = raw_data[32:]
+            
+            cipher = AES.new(self.key, AES.MODE_GCM, nonce=nonce)
+            # If the tag doesn't match, this will throw a ValueError
+            pt = cipher.decrypt_and_verify(ciphertext, tag)
             return pt.decode('utf-8')
-        except ValueError:
-            # Padding is incorrect, likely wrong key
+        except (ValueError, KeyError):
+            # ValueError: Integrity check failed (wrong key or tampered data)
             return None

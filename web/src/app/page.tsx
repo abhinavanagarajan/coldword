@@ -2,8 +2,21 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Key, Lock, Unlock, CheckCircle, XCircle, Info, RefreshCcw } from 'lucide-react';
+import {
+  Shield,
+  Lock,
+  Unlock,
+  CheckCircle,
+  XCircle,
+  Info,
+  RefreshCcw,
+  Fingerprint,
+  Activity,
+  Zap,
+  Microchip
+} from 'lucide-react';
 import TimingInput from '@/components/TimingInput';
+import RhythmVisualizer from '@/components/RhythmVisualizer';
 
 const API_URL = "http://localhost:8000";
 
@@ -15,21 +28,25 @@ export default function Home() {
   // Persistence for the session
   const [phrase] = useState("the quick brown fox");
   const [secretMessage, setSecretMessage] = useState("This is my behavior-locked secret.");
+  const [currentVector, setCurrentVector] = useState<number[] | null>(null);
   const [enrollmentData, setEnrollmentData] = useState<{
     helper: number[],
+    salt: string,
     key_hash: string,
-    encrypted_message: string
+    encrypted_message: string,
+    timing_vector: number[]
   } | null>(null);
 
   const [verificationResult, setVerificationResult] = useState<{
     success: boolean,
-    decrypted?: string,
+    decrypted_message?: string,
     drift?: number
   } | null>(null);
 
   const handleEnroll = async (vector: number[]) => {
     setLoading(true);
     setStatus({ type: null, message: "" });
+    setCurrentVector(vector);
     try {
       const resp = await fetch(`${API_URL}/enroll`, {
         method: 'POST',
@@ -41,8 +58,8 @@ export default function Home() {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setEnrollmentData(data);
-        setStatus({ type: 'success', message: "Enrollment Successful! Your typing fingerprint hash: " + data.key_hash.substring(0, 16) + "..." });
+        setEnrollmentData({ ...data, timing_vector: vector });
+        setStatus({ type: 'success', message: "Enrollment Successful! Scrypt Salt generated and AES-GCM Vault locked." });
         setActiveTab('verify');
       } else {
         setStatus({ type: 'error', message: data.detail || "Enrollment failed." });
@@ -58,6 +75,7 @@ export default function Home() {
     if (!enrollmentData) return;
     setLoading(true);
     setStatus({ type: null, message: "" });
+    setCurrentVector(vector);
     try {
       const resp = await fetch(`${API_URL}/verify`, {
         method: 'POST',
@@ -65,6 +83,7 @@ export default function Home() {
         body: JSON.stringify({
           timing_vector: vector,
           helper: enrollmentData.helper,
+          salt: enrollmentData.salt,
           key_hash: enrollmentData.key_hash,
           encrypted_message: enrollmentData.encrypted_message
         })
@@ -86,162 +105,229 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 sm:p-24 relative overflow-hidden">
-      {/* Background Orbs */}
-      <div className="absolute top-0 -left-4 w-72 h-72 bg-blue-500/10 rounded-full blur-[128px]" />
-      <div className="absolute bottom-0 -right-4 w-96 h-96 bg-purple-500/10 rounded-full blur-[128px]" />
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 sm:p-24 relative overflow-hidden bg-[#050505] text-white">
+      {/* Dynamic Background */}
+      <div className="absolute top-0 -left-20 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px]" />
+      <div className="absolute bottom-0 -right-20 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px]" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
 
-      <div className="w-full max-w-2xl z-10">
+      <div className="w-full max-w-3xl z-10">
         <header className="mb-12 text-center">
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center gap-3 mb-4"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="flex items-center justify-center gap-4 mb-6"
           >
-            <Shield className="w-10 h-10 text-blue-500 shadow-blue-500/50" />
-            <h1 className="text-4xl font-bold tracking-tight text-gradient">ColdWord</h1>
+            <div className="relative">
+              <Shield className="w-16 h-16 text-blue-500" />
+              <motion.div
+                animate={{ opacity: [0.2, 0.5, 0.2] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute inset-0 bg-blue-500 blur-2xl rounded-full"
+              />
+            </div>
+            <h1 className="text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/40">COLDWORD</h1>
           </motion.div>
-          <p className="text-white/50 text-lg">Behavior-Based Encryption PoC</p>
+          <div className="flex items-center justify-center gap-6 text-[10px] uppercase tracking-[0.4em] font-bold text-white/30">
+            <span className="flex items-center gap-2"><Fingerprint className="w-3 h-3" /> Biometric</span>
+            <span className="flex items-center gap-2"><Lock className="w-3 h-3" /> Encrypted</span>
+            <span className="flex items-center gap-2"><Activity className="w-3 h-3" /> Behavioral</span>
+          </div>
         </header>
 
-        <div className="glass rounded-3xl p-8 glow-blue">
-          {/* Tabs */}
-          <div className="flex gap-4 mb-8 bg-white/5 p-1.5 rounded-2xl w-fit">
-            <button
-              onClick={() => setActiveTab('enroll')}
-              className={`px-6 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'enroll' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'}`}
-            >
-              1. Enrollment
-            </button>
-            <button
-              onClick={() => setActiveTab('verify')}
-              disabled={!enrollmentData}
-              className={`px-6 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'verify' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60 disabled:opacity-50'}`}
-            >
-              2. Verification
-            </button>
-          </div>
+        <div className="relative group">
+          {/* Glass Card */}
+          <div className=" glass rounded-[40px] p-10 glow-blue border border-white/10 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
 
-          <AnimatePresence mode="wait">
-            {activeTab === 'enroll' ? (
-              <motion.div
-                key="enroll"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="space-y-6"
+            {/* Tab Navigation */}
+            <div className="flex gap-2 mb-10 bg-white/5 p-1.5 rounded-[20px] w-fit border border-white/5 mx-auto">
+              <button
+                onClick={() => { setActiveTab('enroll'); setStatus({ type: null, message: "" }); setVerificationResult(null); }}
+                className={`flex items-center gap-2 px-8 py-3 rounded-[14px] text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'enroll' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-white/30 hover:text-white/60'}`}
               >
-                <div>
-                  <label className="block text-sm font-medium text-white/60 mb-2">Secret Message to Encrypt</label>
-                  <textarea
-                    value={secretMessage}
-                    onChange={(e) => setSecretMessage(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 h-24"
-                  />
-                </div>
-
-                <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl flex gap-3">
-                  <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-blue-200/70 leading-relaxed">
-                    We will record your unique typing rhythm for the phrase below. This rhythm acts as the key.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-white/80">Step 1: Capture Fingerprint</p>
-                  <TimingInput
-                    targetPhrase={phrase}
-                    onFinished={handleEnroll}
-                    disabled={loading}
-                    placeholder="Type 'the quick brown fox' and press Enter"
-                  />
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="verify"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
+                <Zap className={`w-4 h-4 ${activeTab === 'enroll' ? 'fill-current' : ''}`} />
+                Enrollment
+              </button>
+              <button
+                onClick={() => { setActiveTab('verify'); setStatus({ type: null, message: "" }); }}
+                disabled={!enrollmentData}
+                className={`flex items-center gap-2 px-8 py-3 rounded-[14px] text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'verify' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-white/30 hover:text-white/60 disabled:opacity-20'}`}
               >
-                <div className="bg-green-500/5 border border-green-500/20 p-4 rounded-2xl flex items-center gap-4">
-                  <div className="bg-green-500/20 p-3 rounded-full">
-                    <Lock className="w-5 h-5 text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-200">Session Locked</p>
-                    <p className="text-xs text-green-200/60">Verification required to decrypt</p>
-                  </div>
-                </div>
+                <Unlock className={`w-4 h-4 ${activeTab === 'verify' ? 'fill-current' : ''}`} />
+                Verification
+              </button>
+            </div>
 
-                <div className="space-y-4">
-                  <p className="text-sm font-medium text-white/80">Step 2: Authenticate by Rhythm</p>
-                  <TimingInput
-                    targetPhrase={phrase}
-                    onFinished={handleVerify}
-                    disabled={loading}
-                    placeholder="Type the phrase again to unlock..."
-                  />
-                </div>
+            <AnimatePresence mode="wait">
+              {activeTab === 'enroll' ? (
+                <motion.div
+                  key="enroll"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="space-y-8"
+                >
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">
+                      <Microchip className="w-3 h-3" /> Secure Vault Payload
+                    </label>
+                    <textarea
+                      value={secretMessage}
+                      onChange={(e) => setSecretMessage(e.target.value)}
+                      className="w-full bg-black/60 border border-white/5 rounded-[24px] px-6 py-5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 h-32 transition-all placeholder:text-white/10 font-medium text-lg"
+                      placeholder="Secrets to hide..."
+                    />
+                  </div>
 
-                {verificationResult && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={`p-6 rounded-2xl border ${verificationResult.success ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      {verificationResult.success ? (
-                        <CheckCircle className="w-6 h-6 text-green-400" />
-                      ) : (
-                        <XCircle className="w-6 h-6 text-red-400" />
-                      )}
-                      <h3 className="font-bold text-lg">
-                        {verificationResult.success ? "Decrypted Content" : "Access Denied"}
-                      </h3>
+                  <div className="bg-white/5 border border-white/5 p-6 rounded-[24px] flex gap-5 items-start">
+                    <div className="p-3 bg-blue-500/10 rounded-2xl">
+                      <Fingerprint className="w-6 h-6 text-blue-400" />
                     </div>
-
-                    {verificationResult.success ? (
-                      <div className="bg-black/20 p-4 rounded-xl font-mono text-sm text-green-200 break-all">
-                        {verificationResult.decrypted_message}
-                      </div>
-                    ) : (
-                      <p className="text-red-300/70 text-sm">
-                        Your typing rhythm had a drift of <span className="font-bold">{verificationResult.drift?.toFixed(4)}</span>.
-                        This does not match the enrolled fingerprint.
+                    <div>
+                      <h4 className="text-white font-black text-sm uppercase tracking-tight mb-1">Rhythm Enrollment</h4>
+                      <p className="text-sm text-white/40 leading-relaxed font-medium">
+                        We capture the <span className="text-blue-400">Dwell Time</span> (held keys) and <span className="text-blue-400">Flight Time</span> (gaps) to create a unique behavioral signature.
                       </p>
-                    )}
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                    </div>
+                  </div>
 
-          {/* Status Toast Simulation */}
-          {status.type && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-6 p-4 rounded-2xl flex items-center gap-3 ${status.type === 'success' ? 'bg-blue-500/10 text-blue-300 border border-blue-500/20' : 'bg-red-500/10 text-red-300 border border-red-500/20'}`}
-            >
-              {status.type === 'success' ? <CheckCircle className="w-5 h-5 shrink-0" /> : <XCircle className="w-5 h-5 shrink-0" />}
-              <span className="text-sm font-medium">{status.message}</span>
-            </motion.div>
-          )}
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] text-center">Type the phrase below to lock the vault</p>
+                    <TimingInput
+                      targetPhrase={phrase}
+                      onFinished={handleEnroll}
+                      disabled={loading}
+                      placeholder="the quick brown fox"
+                    />
+                  </div>
+
+                  {enrollmentData && (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+                      <RhythmVisualizer title="Master Fingerprint Recorded" phrase={phrase} vector={enrollmentData.timing_vector} />
+                    </motion.div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="verify"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="space-y-8"
+                >
+                  <div className="bg-gradient-to-br from-white/5 to-transparent border border-white/5 p-8 rounded-[32px] flex items-center gap-6">
+                    <div className={`p-5 rounded-[22px] shadow-2xl transition-all duration-500 ${verificationResult?.success ? 'bg-green-500/20 text-green-400 scale-110' : 'bg-red-500/20 text-red-500'}`}>
+                      {verificationResult?.success ? <Unlock className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
+                    </div>
+                    <div>
+                      <p className="font-black text-white text-xl tracking-tight">Vault Locked</p>
+                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black">Requires High-Fidelity Rhythm Match</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <TimingInput
+                      targetPhrase={phrase}
+                      onFinished={handleVerify}
+                      disabled={loading}
+                      placeholder="Verify rhythm to decrypt..."
+                    />
+                  </div>
+
+                  {enrollmentData && currentVector && (
+                    <div className="space-y-8">
+                      <RhythmVisualizer
+                        title={status.type === 'error' ? "Rejected Input Signature" : "Access Granted Signature"}
+                        phrase={phrase}
+                        vector={currentVector}
+                      />
+
+                      {verificationResult && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`p-8 rounded-[32px] border-2 shadow-2xl relative overflow-hidden ${verificationResult.success ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}
+                        >
+                          {/* Inner glow for success/fail */}
+                          <div className={`absolute inset-0 opacity-10 blur-3xl ${verificationResult.success ? 'bg-green-500' : 'bg-red-500'}`} />
+
+                          <div className="flex items-center gap-4 mb-6 relative z-10">
+                            <div className={`p-3 rounded-2xl ${verificationResult.success ? 'bg-green-400/20' : 'bg-red-400/20'}`}>
+                              {verificationResult.success ? (
+                                <CheckCircle className="w-7 h-7 text-green-400" />
+                              ) : (
+                                <XCircle className="w-7 h-7 text-red-400" />
+                              )}
+                            </div>
+                            <h3 className="font-black text-2xl tracking-tighter uppercase italic">
+                              {verificationResult.success ? "Vault Decrypted" : "Access Denied"}
+                            </h3>
+                          </div>
+
+                          {verificationResult.success ? (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="bg-black/60 p-8 rounded-2xl font-mono text-xl text-green-200 break-all border border-green-500/20 shadow-inner relative z-10"
+                            >
+                              {verificationResult.decrypted_message}
+                            </motion.div>
+                          ) : (
+                            <div className="text-red-300 font-bold space-y-4 relative z-10">
+                              <div className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-red-500/10">
+                                <span className="text-[10px] uppercase tracking-widest text-red-500/60">Euclidean Drift</span>
+                                <span className="font-mono text-xl">{verificationResult.drift?.toFixed(6)}</span>
+                              </div>
+                              <p className="text-xs text-red-300/40 uppercase tracking-widest text-center">Fuzzy Extractor failed to resolve bins.</p>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Global Status Toast */}
+            <AnimatePresence>
+              {status.type && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className={`mt-10 p-5 rounded-[20px] flex items-center gap-4 font-black border-2 backdrop-blur-md ${status.type === 'success' ? 'bg-blue-600/10 text-blue-400 border-blue-500/20' : 'bg-red-600/10 text-red-400 border-red-500/20'}`}
+                >
+                  <div className={`p-2 rounded-lg ${status.type === 'success' ? 'bg-blue-400/20' : 'bg-red-400/20'}`}>
+                    {status.type === 'success' ? <Shield className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                  </div>
+                  <span className="text-xs uppercase tracking-widest">{status.message}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
-        <footer className="mt-8 text-center text-white/20 text-xs flex flex-col items-center gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5"><Key className="w-3 h-3" /> AES-256-CBC</div>
-            <div className="flex items-center gap-1.5"><Unlock className="w-3 h-3" /> Fuzzy Extractor</div>
+        {/* Professional Footer */}
+        <footer className="mt-16 text-center text-white/20 text-[10px] flex flex-col items-center gap-8">
+          <div className="flex flex-wrap justify-center items-center gap-4 px-8 py-3 bg-white/5 rounded-full border border-white/5 uppercase tracking-[0.25em] font-black">
+            <div className="flex items-center gap-2 text-blue-400/80 underline decoration-blue-500/50 underline-offset-4">AES-256-GCM</div>
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <div className="flex items-center gap-2 text-purple-400/80 underline decoration-purple-500/50 underline-offset-4">Scrypt (N=16k)</div>
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <div className="flex items-center gap-2 text-green-400/80 underline decoration-green-500/50 underline-offset-4">Secure Sketch</div>
           </div>
+
           <button
             onClick={() => window.location.reload()}
-            className="flex items-center gap-2 hover:text-white/40 transition-colors"
+            className="group flex items-center gap-3 text-white/20 hover:text-white/60 transition-all uppercase tracking-[0.5em] font-black text-[9px] bg-white/5 px-6 py-2 rounded-full border border-white/5"
           >
-            <RefreshCcw className="w-3 h-3" /> Reset Session
+            <RefreshCcw className="w-3 h-3 group-hover:rotate-180 transition-transform duration-700" />
+            Purge Session Context
           </button>
+
+          <p className="mt-4 opacity-50">&copy; 2024 ColdWord Security Systems. No persistent biometrics stored.</p>
         </footer>
       </div>
     </main>

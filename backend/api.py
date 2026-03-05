@@ -17,6 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import base64
+
 class EnrollmentRequest(BaseModel):
     timing_vector: List[float]
     secret_message: str
@@ -24,6 +26,7 @@ class EnrollmentRequest(BaseModel):
 class VerificationRequest(BaseModel):
     timing_vector: List[float]
     helper: List[float]
+    salt: str  # Base64 encoded
     key_hash: str
     encrypted_message: str
 
@@ -33,7 +36,7 @@ async def enroll(req: EnrollmentRequest):
         extractor = FuzzyExtractor(bin_size=0.3)
         timing_np = np.array(req.timing_vector)
         
-        key, helper = extractor.generate(timing_np)
+        key, helper, salt = extractor.generate(timing_np)
         key_hash = hashlib.sha256(key).hexdigest()
         
         aes = AESManager(key)
@@ -41,6 +44,7 @@ async def enroll(req: EnrollmentRequest):
         
         return {
             "helper": helper.tolist(),
+            "salt": base64.b64encode(salt).decode('utf-8'),
             "key_hash": key_hash,
             "encrypted_message": encrypted_msg,
             "vector_length": len(timing_np)
@@ -54,8 +58,9 @@ async def verify(req: VerificationRequest):
         extractor = FuzzyExtractor(bin_size=0.3)
         timing_np = np.array(req.timing_vector)
         helper_np = np.array(req.helper)
+        salt_bytes = base64.b64decode(req.salt)
         
-        recovered_key, drift = extractor.reproduce(timing_np, helper_np, req.key_hash)
+        recovered_key, drift = extractor.reproduce(timing_np, helper_np, salt_bytes, req.key_hash)
         
         if recovered_key:
             aes = AESManager(recovered_key)

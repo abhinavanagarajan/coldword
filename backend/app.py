@@ -1,6 +1,7 @@
 import sys
 import hashlib
 import numpy as np
+import base64
 from dynamics import get_timing_vector
 from fuzzy import FuzzyExtractor
 from encryption import AESManager
@@ -15,18 +16,19 @@ def main():
     timing_enroll = get_timing_vector(phrase)
     
     extractor = FuzzyExtractor(bin_size=0.3) # 300ms bins (±150ms tolerance)
-    key, helper = extractor.generate(timing_enroll)
+    key, helper, salt = extractor.generate(timing_enroll)
     key_hash = hashlib.sha256(key).hexdigest()
     
     print("\nSuccess! Timing vector captured.")
     print(f"Vector length: {len(timing_enroll)}")
+    print(f"Scrypt Salt: {base64.b64encode(salt).decode()}")
     print(f"Generated Key (SHA256 hash): {key_hash}")
     
     # Encrypt a sample string
     secret_message = "This is a top-secret message locked by your behavior."
     aes_manager = AESManager(key)
     encrypted_msg = aes_manager.encrypt(secret_message)
-    print(f"Encrypted Message: {encrypted_msg}")
+    print(f"Encrypted Message (AES-GCM): {encrypted_msg}")
     
     # 2. VERIFICATION / DECRYPTION PHASE
     print("\n" + "="*40)
@@ -36,17 +38,17 @@ def main():
     timing_verify = get_timing_vector(phrase)
     
     # Attempt to reconstruct the key
-    recovered_key, drift = extractor.reproduce(timing_verify, helper, key_hash)
+    recovered_key, drift = extractor.reproduce(timing_verify, helper, salt, key_hash)
     
     print(f"\nTiming Drift (Euclidean Distance): {drift:.4f}")
     
     if recovered_key:
-        print("✅ ACCESS GRANTED: Dynamics matched! Recovering key...")
+        print(" ACCESS GRANTED: Dynamics matched! Recovering key...")
         decrypter = AESManager(recovered_key)
         decrypted_msg = decrypter.decrypt(encrypted_msg)
         print(f"Decrypted Message: {decrypted_msg}")
     else:
-        print("❌ ACCESS DENIED: Timing variance exceeded threshold.")
+        print(" ACCESS DENIED: Timing variance exceeded threshold.")
         print("Even though the text was correct, your typing rhythm was different.")
         print("This 'Failed State' prevents unauthorized users from using your password.")
 

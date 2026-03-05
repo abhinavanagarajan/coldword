@@ -55,7 +55,7 @@ const TimingInput: React.FC<TimingInputProps> = ({ targetPhrase, onFinished, pla
                 temp_presses[ev.key] = ev.timestamp;
                 if (last_release_time !== null) {
                     if (flight_times.length < target_len - 1) {
-                        flight_times.append ? null : flight_times.push(ev.timestamp - last_release_time);
+                        flight_times.push(ev.timestamp - last_release_time);
                     }
                 }
             } else if (ev.action === 'release') {

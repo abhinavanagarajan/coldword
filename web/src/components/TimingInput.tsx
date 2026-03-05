@@ -50,6 +50,14 @@ const TimingInput: React.FC<TimingInputProps> = ({ targetPhrase, onFinished, pla
 
         const target_len = targetPhrase.length;
 
+        // Validation: Passphrase must match exactly
+        if (value.trim() !== targetPhrase.trim()) {
+            alert(`Typo detected! Please type exactly: "${targetPhrase}"`);
+            setValue("");
+            events.current = [];
+            return;
+        }
+
         for (const ev of events.current) {
             if (ev.action === 'press') {
                 temp_presses[ev.key] = ev.timestamp;

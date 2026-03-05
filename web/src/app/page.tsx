@@ -193,7 +193,7 @@ export default function Home() {
                   </div>
 
                   <div className="space-y-4">
-                    <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] text-center">Type the phrase below to lock the vault</p>
+                    <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] text-center italic">Type exactly: "{phrase}"</p>
                     <TimingInput
                       targetPhrase={phrase}
                       onFinished={handleEnroll}
@@ -202,7 +202,12 @@ export default function Home() {
                     />
                   </div>
 
-                  {enrollmentData && (
+                  {!enrollmentData ? (
+                    <div className="h-32 rounded-[32px] border border-dashed border-white/5 flex flex-col items-center justify-center gap-2 text-white/10 italic text-xs font-bold uppercase tracking-[0.2em]">
+                      <Activity className="w-5 h-5 opacity-20" />
+                      <span>Fingerprint will generate upon completion</span>
+                    </div>
+                  ) : (
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                       <RhythmVisualizer title="Master Fingerprint Recorded" phrase={phrase} vector={enrollmentData.timing_vector} />
                     </motion.div>
@@ -222,26 +227,37 @@ export default function Home() {
                     </div>
                     <div>
                       <p className="font-black text-white text-xl tracking-tight">Vault Locked</p>
-                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black">Requires High-Fidelity Rhythm Match</p>
+                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black">Requires Exact rhythm for: "{phrase}"</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Biometric Receiver</span>
+                      {!currentVector && <motion.span animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ repeat: Infinity, duration: 2 }} className="text-[9px] text-blue-500 font-bold uppercase tracking-tighter">● Waiting for signature</motion.span>}
+                    </div>
                     <TimingInput
                       targetPhrase={phrase}
                       onFinished={handleVerify}
                       disabled={loading}
-                      placeholder="Verify rhythm to decrypt..."
+                      placeholder="Verify rhythm..."
                     />
                   </div>
 
-                  {enrollmentData && currentVector && (
+                  {enrollmentData && (
                     <div className="space-y-8">
-                      <RhythmVisualizer
-                        title={status.type === 'error' ? "Rejected Input Signature" : "Access Granted Signature"}
-                        phrase={phrase}
-                        vector={currentVector}
-                      />
+                      {!currentVector ? (
+                        <div className="h-32 rounded-[32px] border border-dashed border-white/5 flex flex-col items-center justify-center gap-2 text-white/10 italic text-xs font-bold uppercase tracking-[0.2em]">
+                          <Activity className="w-5 h-5 opacity-20" />
+                          <span>Signature heatmap will manifest here</span>
+                        </div>
+                      ) : (
+                        <RhythmVisualizer
+                          title={status.type === 'error' ? "Rejected Input Signature" : "Access Granted Signature"}
+                          phrase={phrase}
+                          vector={currentVector}
+                        />
+                      )}
 
                       {verificationResult && (
                         <motion.div
